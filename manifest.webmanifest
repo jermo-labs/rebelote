@@ -1,0 +1,21 @@
+{
+  "name": "Belote — Compteur de score",
+  "short_name": "Belote",
+  "description": "Compteur de score de belote hors-ligne : une colonne par équipe, saisie des contrats en deux taps, feuille de match et objectif réglable.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "/belote/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#1f6b45",
+  "theme_color": "#1f6b45",
+  "categories": ["games", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Belote — Compteur</title>
+<meta name="description" content="Compteur de score de belote hors-ligne : une colonne par équipe, saisie des contrats en deux taps, feuille de match et objectif réglable.">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f6b45" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161511" media="(prefers-color-scheme: dark)">
+
+<!-- Installation iOS (écran d'accueil + plein écran) -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Belote">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&display=swap">
+<style>
+  /* Layout : app une-page tenue à l'écran — en-tête + deux colonnes d'équipe,
+     feuille de match défilante au centre, grille de contrats fixée en bas. */
+  :root{
+    --baize:#1f6b45;      /* vert tapis, accent */
+    --baize-deep:#155235;
+    --bg:#f3efe6;         /* crème chaud */
+    --surface:#ffffff;
+    --surface-2:#faf7f0;
+    --line:#e2dccb;
+    --fg:#241f17;
+    --muted:#7d7566;
+    --gold:#b8894a;
+    --win:#1f6b45;
+    --shadow:0 1px 2px rgba(36,31,23,.06),0 8px 24px rgba(36,31,23,.07);
+    --r:14px;
+    color-scheme:light;
+    font-family:"Figtree",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --baize:#3fae76;--baize-deep:#2b8d5d;--bg:#161511;--surface:#211f19;
+    --surface-2:#1b1a15;--line:#34312a;--fg:#f0ebdf;--muted:#a69d8b;
+    --gold:#d2a768;--win:#3fae76;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.45);
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --baize:#3fae76;--baize-deep:#2b8d5d;--bg:#161511;--surface:#211f19;
+    --surface-2:#1b1a15;--line:#34312a;--fg:#f0ebdf;--muted:#a69d8b;
+    --gold:#d2a768;--win:#3fae76;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--fg);margin:0;
+    display:flex;flex-direction:column;overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    font-size:14px;font-feature-settings:"tnum"}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+  button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+
+  .wrap{flex:1;min-height:0;display:flex;flex-direction:column;
+    width:100%;max-width:520px;margin:0 auto;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-left:max(14px,env(safe-area-inset-left,0px));
+    padding-right:max(14px,env(safe-area-inset-right,0px))}
+
+  /* En-tête */
+  header{display:flex;align-items:center;justify-content:space-between;
+    gap:10px;padding-block:12px 8px}
+  .brand{display:flex;flex-direction:column;line-height:1}
+  .brand h1{margin:0;font-family:"Fraunces",Georgia,serif;
+    font-size:1.45rem;font-weight:600;letter-spacing:-.01em}
+  .brand .target{font-size:.8rem;color:var(--muted);margin-top:3px}
+  .brand .target b{color:var(--baize);font-weight:600}
+  .icon-btn{width:40px;height:40px;border-radius:12px;background:var(--surface);
+    box-shadow:var(--shadow);display:grid;place-items:center;font-size:1.15rem}
+
+  /* Colonnes équipes */
+  .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-bottom:10px}
+  .team{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);
+    padding:12px 12px 14px;position:relative;overflow:hidden}
+  .team::before{content:"";position:absolute;inset:0 0 auto;height:4px;
+    background:var(--baize)}
+  .team.b::before{background:var(--gold)}
+  .team.win{outline:2px solid var(--win)}
+  .team-name{display:flex;align-items:center;gap:6px;width:100%;
+    font-weight:600;font-size:.95rem;color:var(--muted);text-align:left}
+  .team-name .pen{opacity:.5;font-size:.8rem}
+  .score{font-family:"Fraunces",Georgia,serif;font-size:2.7rem;font-weight:600;
+    line-height:1;margin-top:6px;letter-spacing:-.02em}
+  .score small{font-size:.9rem;color:var(--muted);font-weight:500;
+    font-family:"Figtree",sans-serif;margin-left:4px}
+  .bar{height:6px;border-radius:4px;background:var(--line);margin-top:10px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--baize);transition:width .35s ease}
+  .team.b .bar i{background:var(--gold)}
+  .flag{position:absolute;top:8px;right:10px;font-size:1.1rem;opacity:0;
+    transition:opacity .3s}
+  .team.win .flag{opacity:1}
+
+  /* Feuille de match */
+  .sheet{flex:1;min-height:0;background:var(--surface);border-radius:var(--r);
+    box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
+  .sheet-head{display:grid;grid-template-columns:34px 1fr 1fr;
+    padding:10px 14px;font-size:.72rem;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line)}
+  .sheet-head span:nth-child(3),.sheet-head span:nth-child(2){text-align:right}
+  .rows{flex:1;min-height:0;overflow-y:auto}
+  .row{display:grid;grid-template-columns:34px 1fr 1fr;align-items:center;
+    padding:9px 14px;border-bottom:1px solid var(--line);font-size:1.05rem}
+  .row .n{color:var(--muted);font-size:.8rem}
+  .row .v{text-align:right;font-weight:600}
+  .row .v.dim{color:var(--line);font-weight:400}
+  .row .croix{font-size:.68em;color:var(--gold);margin-left:4px;vertical-align:.35em;font-weight:700}
+  .row.last{background:var(--surface-2)}
+  .empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:.9rem}
+  .empty b{display:block;color:var(--fg);font-family:"Fraunces",serif;
+    font-size:1.1rem;font-weight:600;margin-bottom:4px}
+
+  /* Barre d'actions */
+  .actions{display:flex;gap:8px;padding-block:10px}
+  .actions button{flex:1;padding:11px;border-radius:12px;background:var(--surface);
+    box-shadow:var(--shadow);font-size:.88rem;font-weight:600;color:var(--muted);
+    display:flex;align-items:center;justify-content:center;gap:6px}
+  .actions button:disabled{opacity:.4}
+
+  /* Grille de contrats */
+  .pad{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
+  .pad-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--muted);margin:2px 2px 8px}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+  .chip{padding:13px 0;border-radius:12px;background:var(--surface);
+    box-shadow:var(--shadow);font-family:"Fraunces",serif;font-weight:600;
+    font-size:1.15rem;text-align:center;transition:transform .08s}
+  .chip:active{transform:scale(.93)}
+
+  /* Feuille modale d'attribution */
+  .overlay{position:fixed;inset:0;z-index:30;background:rgba(20,16,10,.45);
+    opacity:0;pointer-events:none;transition:opacity .2s}
+  .overlay.on{opacity:1;pointer-events:auto}
+  .card{position:fixed;left:50%;bottom:0;transform:translate(-50%,110%);
+    width:min(520px,100%);background:var(--surface);
+    border-radius:20px 20px 0 0;box-shadow:var(--shadow);z-index:31;
+    padding:18px 16px max(20px,env(safe-area-inset-bottom,0px));
+    transition:transform .26s cubic-bezier(.2,.8,.2,1)}
+  .card.on{transform:translate(-50%,0)}
+  .card h2{margin:0 0 2px;font-family:"Fraunces",serif;font-size:1.15rem}
+  .card .pts{font-family:"Fraunces",serif;color:var(--baize);font-weight:600}
+  .card p{margin:0 0 14px;color:var(--muted);font-size:.85rem}
+  .choose{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .choose button{padding:18px 10px;border-radius:14px;font-weight:600;
+    font-size:1.05rem;color:#fff;box-shadow:var(--shadow)}
+  .choose button.a{background:var(--baize)}
+  .choose button.b{background:var(--gold)}
+  .close{position:absolute;top:12px;right:14px;color:var(--muted);font-size:1.3rem}
+
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:.78rem;color:var(--muted);font-weight:600}
+  .field input{padding:12px;border-radius:12px;border:1px solid var(--line);
+    background:var(--surface-2);color:var(--fg);font:inherit}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{padding:9px 14px;border-radius:10px;background:var(--surface-2);
+    border:1px solid var(--line);font-weight:600;font-size:.9rem}
+  .seg button.sel{background:var(--baize);color:#fff;border-color:var(--baize)}
+  .primary{width:100%;margin-top:4px;padding:14px;border-radius:14px;
+    background:var(--baize);color:#fff;font-weight:600;font-size:1rem}
+
+  .win-banner{position:fixed;left:50%;top:env(safe-area-inset-top,0px);
+    transform:translate(-50%,-120%);z-index:40;margin-top:10px;
+    background:var(--baize);color:#fff;padding:12px 20px;border-radius:14px;
+    box-shadow:var(--shadow);font-weight:600;display:flex;gap:10px;align-items:center;
+    transition:transform .3s}
+  .win-banner.on{transform:translate(-50%,0)}
+  .win-banner button{background:rgba(255,255,255,.25);padding:6px 12px;
+    border-radius:8px;font-weight:600;font-size:.85rem}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Belote</h1>
+      <div class="target">Partie en <b id="tgt">2000</b> points</div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="Réglages">⚙</button>
+  </header>
+
+  <div class="teams">
+    <div class="team a" id="teamA">
+      <span class="flag">🏆</span>
+      <button class="team-name" data-edit="0">Nous <span class="pen">✎</span></button>
+      <div class="score" id="scoreA">0<small>pts</small></div>
+      <div class="bar"><i id="barA"></i></div>
+    </div>
+    <div class="team b" id="teamB">
+      <span class="flag">🏆</span>
+      <button class="team-name" data-edit="1">Eux <span class="pen">✎</span></button>
+      <div class="score" id="scoreB">0<small>pts</small></div>
+      <div class="bar"><i id="barB"></i></div>
+    </div>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet-head">
+      <span>#</span><span id="hA">Nous</span><span id="hB">Eux</span>
+    </div>
+    <div class="rows" id="rows">
+      <div class="empty"><b>Aucune donne</b>Appuyez sur un contrat ci-dessous pour marquer.</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="undo" disabled>↺ Annuler</button>
+    <button id="reset">✦ Nouvelle partie</button>
+  </div>
+
+  <div class="pad">
+    <div class="pad-title">Contrats — appuyez pour marquer</div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<!-- Attribution -->
+<div class="overlay" id="ov"></div>
+<div class="card" id="attrCard">
+  <button class="close" data-close>×</button>
+  <h2><span class="pts" id="attrPts">120</span> points</h2>
+  <p>À quelle équipe ?</p>
+  <div class="choose">
+    <button class="a" id="attrA">Nous</button>
+    <button class="b" id="attrB">Eux</button>
+  </div>
+</div>
+
+<!-- Réglages -->
+<div class="card" id="setCard">
+  <button class="close" data-close>×</button>
+  <h2>Réglages</h2>
+  <p>Paramètres de la partie en cours.</p>
+  <div class="field">
+    <label for="tgtInput">Objectif (points pour gagner)</label>
+    <input type="number" id="tgtInput" inputmode="numeric" min="100" step="100">
+    <div class="seg" id="tgtSeg"></div>
+  </div>
+  <div class="field">
+    <label for="nameA">Nom équipe 1</label>
+    <input type="text" id="nameA" maxlength="14">
+  </div>
+  <div class="field">
+    <label for="nameB">Nom équipe 2</label>
+    <input type="text" id="nameB" maxlength="14">
+  </div>
+  <button class="primary" data-close>Terminé</button>
+</div>
+
+<!-- Renommer rapide -->
+<div class="card" id="renCard">
+  <button class="close" data-close>×</button>
+  <h2 id="renTitle">Renommer</h2>
+  <div class="field">
+    <input type="text" id="renInput" maxlength="14">
+  </div>
+  <button class="primary" id="renSave">Enregistrer</button>
+</div>
+
+<div class="win-banner" id="winBanner">
+  <span id="winText">Partie gagnée !</span>
+  <button id="winNew">Rejouer</button>
+</div>
+
+<script>
+const CONTRACTS=[80,90,100,110,120,130,140,150,160,320,640,250,500];
+const DEFAULT={target:2000,names:["Nous","Eux"],donnes:[]};
+let S=load();
+
+function load(){
+  try{const r=localStorage.getItem("belote");if(r)return{...DEFAULT,...JSON.parse(r)};}catch(e){}
+  return structuredClone(DEFAULT);
+}
+function save(){try{localStorage.setItem("belote",JSON.stringify(S));}catch(e){}}
+
+const $=s=>document.querySelector(s);
+const totals=()=>S.donnes.reduce((a,d)=>{a[d.team]+=d.pts;return a;},[0,0]);
+
+function render(){
+  const t=totals();
+  $("#tgt").textContent=S.target;
+  $("#scoreA").innerHTML=t[0]+'<small>pts</small>';
+  $("#scoreB").innerHTML=t[1]+'<small>pts</small>';
+  $("#barA").style.width=Math.min(100,t[0]/S.target*100)+"%";
+  $("#barB").style.width=Math.min(100,t[1]/S.target*100)+"%";
+  $("#hA").textContent=S.names[0];$("#hB").textContent=S.names[1];
+  document.querySelectorAll(".team-name").forEach((b,i)=>b.firstChild.textContent=S.names[i]+" ");
+
+  // feuille
+  const rows=$("#rows");
+  if(!S.donnes.length){
+    rows.innerHTML='<div class="empty"><b>Aucune donne</b>Appuyez sur un contrat ci-dessous pour marquer.</div>';
+  }else{
+    rows.innerHTML=S.donnes.map((d,i)=>{
+      const last=i===S.donnes.length-1?" last":"";
+      const mark=d.pts===250?'<span class="croix" title="Capot">✚</span>':'';
+      const cell=`<span class="v">${d.pts}${mark}</span>`;
+      const a=d.team===0?cell:'<span class="v dim">·</span>';
+      const b=d.team===1?cell:'<span class="v dim">·</span>';
+      return `<div class="row${last}"><span class="n">${i+1}</span>${a}${b}</div>`;
+    }).join("");
+    rows.scrollTop=rows.scrollHeight;
+  }
+  $("#undo").disabled=!S.donnes.length;
+
+  // victoire
+  const win=t.findIndex(x=>x>=S.target);
+  $("#teamA").classList.toggle("win",win===0);
+  $("#teamB").classList.toggle("win",win===1);
+  const wb=$("#winBanner");
+  if(win>=0){$("#winText").textContent=S.names[win]+" gagne — "+t[win]+" pts";wb.classList.add("on");}
+  else wb.classList.remove("on");
+  save();
+}
+
+// grille
+$("#grid").innerHTML=CONTRACTS.map(v=>
+  `<button class="chip" data-v="${v}">${v}</button>`).join("");
+
+// attribution
+let pending=null;
+$("#grid").addEventListener("click",e=>{
+  const c=e.target.closest(".chip");if(!c)return;
+  pending=+c.dataset.v;
+  $("#attrPts").textContent=pending;
+  $("#attrA").textContent=S.names[0];
+  $("#attrB").textContent=S.names[1];
+  openCard("#attrCard");
+});
+$("#attrA").onclick=()=>attr(0);
+$("#attrB").onclick=()=>attr(1);
+function attr(team){S.donnes.push({team,pts:pending});closeCards();render();}
+
+$("#undo").onclick=()=>{S.donnes.pop();render();};
+$("#reset").onclick=()=>{S.donnes=[];render();};
+$("#winNew").onclick=()=>{S.donnes=[];render();};
+
+// cartes modales
+function openCard(sel){$("#ov").classList.add("on");$(sel).classList.add("on");}
+function closeCards(){$("#ov").classList.remove("on");
+  document.querySelectorAll(".card").forEach(c=>c.classList.remove("on"));}
+$("#ov").onclick=closeCards;
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeCards);
+
+// réglages
+const QUICK=[1000,1500,2000,3000];
+$("#tgtSeg").innerHTML=QUICK.map(v=>`<button data-t="${v}">${v}</button>`).join("");
+$("#settingsBtn").onclick=()=>{
+  $("#tgtInput").value=S.target;$("#nameA").value=S.names[0];$("#nameB").value=S.names[1];
+  markSeg();openCard("#setCard");
+};
+function markSeg(){document.querySelectorAll("#tgtSeg button").forEach(b=>
+  b.classList.toggle("sel",+b.dataset.t===S.target));}
+$("#tgtSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  S.target=+b.dataset.t;$("#tgtInput").value=S.target;markSeg();render();});
+$("#tgtInput").addEventListener("input",e=>{const v=+e.target.value;
+  if(v>0){S.target=v;markSeg();render();}});
+$("#nameA").addEventListener("input",e=>{S.names[0]=e.target.value||"Nous";render();});
+$("#nameB").addEventListener("input",e=>{S.names[1]=e.target.value||"Eux";render();});
+
+// renommage rapide en tapant le nom d'équipe
+let renIdx=0;
+document.querySelectorAll(".team-name").forEach(b=>{
+  b.onclick=()=>{renIdx=+b.dataset.edit;
+    $("#renTitle").textContent="Renommer : "+S.names[renIdx];
+    $("#renInput").value=S.names[renIdx];openCard("#renCard");
+    setTimeout(()=>$("#renInput").focus(),200);};
+});
+$("#renSave").onclick=()=>{S.names[renIdx]=$("#renInput").value.trim()||(renIdx?"Eux":"Nous");
+  closeCards();render();};
+
+render();
+
+// Service worker (hors-ligne installable)
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
