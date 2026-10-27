@@ -1,6 +1,6 @@
 /* Service worker — Belote. Pré-cache la coque de l'app pour un fonctionnement
    hors-ligne complet, et met en cache les polices Google au fil de l'eau. */
-const VERSION = "belote-v1";
+const VERSION = "belote-v2";
 const SHELL = [
   "./",
   "./index.html",
